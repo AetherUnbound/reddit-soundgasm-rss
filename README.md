@@ -49,6 +49,18 @@ just install
 just test
 ```
 
+### Configuration
+
+Create a `.env` file to customize the port:
+
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Edit the port (default is 8000)
+PORT=9000
+```
+
 ### Docker
 
 ```bash
