@@ -1,0 +1,16 @@
+# Ignore development and local files
+.venv/
+.git/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+.mypy_cache/
+
+# Ignore documentation and non-essential files
+README.md
+LICENSE.md
+prompt.md
+.gitignore
