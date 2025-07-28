@@ -1,3 +1,6 @@
+set dotenv-load
+
+
 @default:
     just -ul
 
@@ -8,17 +11,7 @@ build:
 
 # Start the application with Docker Compose
 up service="":
-    #!/usr/bin/env bash
-    if [ ! -f compose.yml ]; then
-        echo "compose.yml not found, running with docker run..."
-        docker run --rm -p 8000:8000 reddit-soundgasm-rss
-    else
-        if [ -n "{{service}}" ]; then
-            docker compose up {{service}}
-        else
-            docker compose up
-        fi
-    fi
+    docker compose up -d {{ service }}
 
 # Stop the application
 down:
@@ -26,12 +19,7 @@ down:
 
 # View logs
 logs service="":
-    #!/usr/bin/env bash
-    if [ -n "{{service}}" ]; then
-        docker compose logs -f {{service}}
-    else
-        docker compose logs -f
-    fi
+    docker compose logs -f {{ service }}
 
 # Run a command in the app container
 run *args:
@@ -49,7 +37,7 @@ install:
 test:
     #!/usr/bin/env bash
     echo "Testing RSS feed endpoint..."
-    curl -s http://localhost:8000/feed.rss | head -20
+    curl -s http://localhost:$PORT/feed.rss | head -20
 
 # Clean up Docker resources
 clean:
