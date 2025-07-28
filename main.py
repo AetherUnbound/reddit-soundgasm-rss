@@ -136,9 +136,8 @@ def generate_podcast_rss(entries: List[dict]) -> str:
         if entry['published']:
             fe.pubDate(datetime(*entry['published'][:6], tzinfo=timezone.utc))
         
-        # Add audio enclosure and episode image
+        # Add audio enclosure
         fe.enclosure(entry['audio_url'], 0, 'audio/m4a')
-        fe.load_extension('podcast')
         fe.podcast.itunes_image(PODCAST_IMAGE)
         
         # Add duration if available
