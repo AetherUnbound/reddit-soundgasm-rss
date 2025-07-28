@@ -195,7 +195,7 @@ async def root():
 
 
 @click.command()
-@click.option('--local', type=click.Path(exists=True), help='Path to local RSS file instead of fetching from Reddit')
+@click.option('--local', type=click.Path(exists=True), help='Path to local RSS file - if used, prints RSS to stdout instead of running server')
 @click.option('--port', default=8000, help='Port to run the server on (default: 8000)')
 @click.option('--host', default="0.0.0.0", help='Host to bind to (default: 0.0.0.0)')
 def main(local, port, host):
@@ -206,6 +206,17 @@ def main(local, port, host):
     if local:
         LOCAL_RSS_FILE = str(Path(local).absolute())
         logger.info(f"Using local RSS file: {LOCAL_RSS_FILE}")
+        
+        # Generate RSS and print to stdout instead of running server
+        entries = fetch_reddit_rss()
+        if entries:
+            rss_content = generate_podcast_rss(entries)
+            print(rss_content)
+            logger.info(f"Generated RSS with {len(entries)} entries")
+        else:
+            logger.error("No entries found in RSS feed")
+            sys.exit(1)
+        return
     
     import uvicorn
     uvicorn.run(app, host=host, port=port)
