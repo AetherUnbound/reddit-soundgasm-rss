@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 RSS_SOURCE = "https://www.reddit.com/r/BlackWolfFeed.rss"
 CACHE_DURATION = 3600  # 1 hour in seconds
 PODCAST_IMAGE = "https://static-cdn.jtvnw.net/jtv_user_pictures/55a81036-85b5-426d-8a0b-4096f0d9b732-profile_image-300x300.jpg"
+USER_AGENT = "RedditSoundgasmRSSBot/1.0 (+https://github.com/user/reddit-soundgasm-rss)"
 
 # Simple in-memory cache
 _cache: Optional[Tuple[float, str]] = None
@@ -38,7 +39,7 @@ def extract_soundgasm_links(content: str) -> List[str]:
 def scrape_soundgasm_audio(url: str) -> Optional[str]:
     """Scrape soundgasm page to extract m4a audio URL."""
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=10, headers={'User-Agent': USER_AGENT})
         response.raise_for_status()
         
         # Look for the m4a URL in the JavaScript
@@ -63,7 +64,7 @@ def scrape_soundgasm_audio(url: str) -> Optional[str]:
 def fetch_reddit_rss() -> List[dict]:
     """Fetch and parse the Reddit RSS feed."""
     try:
-        response = requests.get(RSS_SOURCE, timeout=10)
+        response = requests.get(RSS_SOURCE, timeout=10, headers={'User-Agent': USER_AGENT})
         response.raise_for_status()
         
         feed = feedparser.parse(response.content)
