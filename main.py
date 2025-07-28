@@ -14,12 +14,12 @@ from fastapi import FastAPI, Response
 from feedgen.feed import FeedGenerator
 
 app = FastAPI()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 RSS_SOURCE = "https://www.reddit.com/r/BlackWolfFeed.rss"
 CACHE_DURATION = 3600  # 1 hour in seconds
-PODCAST_IMAGE = "https://static-cdn.jtvnw.net/jtv_user_pictures/55a81036-85b5-426d-8a0b-4096f0d9b732-profile_image-300x300.jpg"
+PODCAST_IMAGE = "https://static-cdn.jtvnw.net/jtv_user_pictures/55a81036-85b5-426d-8a0b-4096f0d9b732-profile_image-600x600.jpg"
 USER_AGENT = "RedditSoundgasmRSSBot/1.0 (+https://github.com/user/reddit-soundgasm-rss)"
 
 # Global configuration
@@ -66,11 +66,30 @@ def scrape_soundgasm_audio(url: str) -> tuple[Optional[str], Optional[str]]:
         duration_div = soup.find('div', class_='jp-duration')
         if duration_div:
             duration_text = duration_div.get_text(strip=True)
+            logger.debug(f"Raw duration text from {url}: '{duration_text}'")
             # Remove leading dash if present and clean up
-            duration = duration_text.lstrip('-')
+            if duration_text and duration_text.strip():
+                duration = duration_text.lstrip('-').strip()
+                logger.debug(f"Cleaned duration: '{duration}'")
+            else:
+                logger.debug(f"Duration div found but empty for {url}")
+                duration = None
+        else:
+            logger.debug(f"No jp-duration div found for {url}")
+            
+        # Alternative: look for duration in JavaScript or meta tags
+        if not duration:
+            # Check if duration is in any script tags or data attributes
+            duration_match = re.search(r'duration["\']?\s*:\s*["\']?(\d+:?\d*)["\']?', response.text, re.IGNORECASE)
+            if duration_match:
+                duration = duration_match.group(1)
+                logger.debug(f"Found duration in script: '{duration}'")
             
         if not audio_url:
             logger.warning(f"No audio URL found in {url}")
+        
+        if not duration:
+            logger.warning(f"No duration found in {url}")
             
         return audio_url, duration
         
@@ -128,6 +147,7 @@ def generate_podcast_rss(entries: List[dict]) -> str:
     fg.description('Audio episodes from BlackWolfFeed subreddit')
     fg.link(href='https://www.reddit.com/r/BlackWolfFeed', rel='alternate')
     fg.id('https://www.reddit.com/r/BlackWolfFeed.rss')
+    fg.logo(PODCAST_IMAGE)
     fg.language('en')
     fg.lastBuildDate(datetime.now(timezone.utc))
     
@@ -139,7 +159,8 @@ def generate_podcast_rss(entries: List[dict]) -> str:
     fg.podcast.itunes_type('episodic')
     fg.podcast.itunes_image(PODCAST_IMAGE)
     
-    for entry in entries:
+    for i, entry in enumerate(entries):
+        print(f"On entry: {i+1}")
         fe = fg.add_entry()
         fe.title(entry['title'])
         fe.description(entry['description'])
@@ -148,7 +169,7 @@ def generate_podcast_rss(entries: List[dict]) -> str:
         
         if entry['published']:
             fe.pubDate(datetime(*entry['published'][:6], tzinfo=timezone.utc))
-        
+
         # Add audio enclosure
         fe.enclosure(entry['audio_url'], 0, 'audio/m4a')
         fe.podcast.itunes_image(PODCAST_IMAGE)
@@ -156,6 +177,8 @@ def generate_podcast_rss(entries: List[dict]) -> str:
         # Add duration if available
         if entry.get('duration'):
             fe.podcast.itunes_duration(entry['duration'])
+        print(f"{fe=}")
+        print(f"{entry=}")
         
     return fg.rss_str(pretty=True).decode('utf-8')
 
