@@ -36,29 +36,41 @@ def extract_soundgasm_links(content: str) -> List[str]:
     return soundgasm_links
 
 
-def scrape_soundgasm_audio(url: str) -> Optional[str]:
-    """Scrape soundgasm page to extract m4a audio URL."""
+def scrape_soundgasm_audio(url: str) -> tuple[Optional[str], Optional[str]]:
+    """Scrape soundgasm page to extract m4a audio URL and duration."""
     try:
         response = requests.get(url, timeout=10, headers={'User-Agent': USER_AGENT})
         response.raise_for_status()
         
+        soup = BeautifulSoup(response.text, 'html.parser')
+        audio_url = None
+        duration = None
+        
         # Look for the m4a URL in the JavaScript
         match = re.search(r'm4a:\s*"([^"]+)"', response.text)
         if match:
-            return match.group(1)
+            audio_url = match.group(1)
+        else:
+            # Alternative: look for audio tag in rendered content
+            audio_tag = soup.find('audio')
+            if audio_tag and audio_tag.get('src'):
+                audio_url = audio_tag['src']
         
-        # Alternative: look for audio tag in rendered content
-        soup = BeautifulSoup(response.text, 'html.parser')
-        audio_tag = soup.find('audio')
-        if audio_tag and audio_tag.get('src'):
-            return audio_tag['src']
+        # Extract duration from jp-duration div
+        duration_div = soup.find('div', class_='jp-duration')
+        if duration_div:
+            duration_text = duration_div.get_text(strip=True)
+            # Remove leading dash if present and clean up
+            duration = duration_text.lstrip('-')
             
-        logger.warning(f"No audio URL found in {url}")
-        return None
+        if not audio_url:
+            logger.warning(f"No audio URL found in {url}")
+            
+        return audio_url, duration
         
     except Exception as e:
         logger.error(f"Error scraping {url}: {e}")
-        return None
+        return None, None
 
 
 def fetch_reddit_rss() -> List[dict]:
@@ -75,8 +87,8 @@ def fetch_reddit_rss() -> List[dict]:
             soundgasm_links = extract_soundgasm_links(entry.get('content', [{}])[0].get('value', ''))
             
             if soundgasm_links:
-                # Get audio URL from first soundgasm link
-                audio_url = scrape_soundgasm_audio(soundgasm_links[0])
+                # Get audio URL and duration from first soundgasm link
+                audio_url, duration = scrape_soundgasm_audio(soundgasm_links[0])
                 if audio_url:
                     entries.append({
                         'title': entry.title,
@@ -85,6 +97,7 @@ def fetch_reddit_rss() -> List[dict]:
                         'published': entry.get('published_parsed'),
                         'guid': entry.get('id', entry.link),
                         'audio_url': audio_url,
+                        'duration': duration,
                         'soundgasm_url': soundgasm_links[0]
                     })
         
@@ -127,6 +140,10 @@ def generate_podcast_rss(entries: List[dict]) -> str:
         fe.enclosure(entry['audio_url'], 0, 'audio/m4a')
         fe.load_extension('podcast')
         fe.podcast.itunes_image(PODCAST_IMAGE)
+        
+        # Add duration if available
+        if entry.get('duration'):
+            fe.podcast.itunes_duration(entry['duration'])
         
     return fg.rss_str(pretty=True).decode('utf-8')
 
