@@ -1,6 +1,7 @@
 import re
+import time
 import logging
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime, timezone
 
 import feedparser
@@ -14,6 +15,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 RSS_SOURCE = "https://www.reddit.com/r/BlackWolfFeed.rss"
+CACHE_DURATION = 3600  # 1 hour in seconds
+
+# Simple in-memory cache
+_cache: Optional[Tuple[float, str]] = None
 
 
 def extract_soundgasm_links(content: str) -> List[str]:
@@ -124,18 +129,27 @@ def generate_podcast_rss(entries: List[dict]) -> str:
 @app.get("/feed.rss")
 async def get_rss_feed():
     """Main endpoint that returns the converted RSS feed."""
-    logger.info("Fetching RSS feed...")
+    global _cache
+    current_time = time.time()
+    
+    # Check if we have valid cached content
+    if _cache and (current_time - _cache[0]) < CACHE_DURATION:
+        logger.info("Serving cached RSS feed")
+        return Response(content=_cache[1], media_type="application/rss+xml")
+    
+    logger.info("Fetching fresh RSS feed...")
     entries = fetch_reddit_rss()
     
     if not entries:
         logger.warning("No entries found")
-        return Response(
-            content="<?xml version='1.0' encoding='UTF-8'?><rss version='2.0'><channel><title>Error</title><description>No entries found</description></channel></rss>",
-            media_type="application/rss+xml"
-        )
+        error_content = "<?xml version='1.0' encoding='UTF-8'?><rss version='2.0'><channel><title>Error</title><description>No entries found</description></channel></rss>"
+        return Response(content=error_content, media_type="application/rss+xml")
     
     rss_content = generate_podcast_rss(entries)
     logger.info(f"Generated RSS feed with {len(entries)} entries")
+    
+    # Cache the generated content
+    _cache = (current_time, rss_content)
     
     return Response(content=rss_content, media_type="application/rss+xml")
 
