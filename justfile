@@ -43,3 +43,9 @@ test:
 clean:
     docker image prune -f
     docker container prune -f
+
+# Pull, build, and deploy all services
+deploy:
+    -git pull
+    @just build
+    @just up
