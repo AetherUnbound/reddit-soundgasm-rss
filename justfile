@@ -47,5 +47,6 @@ clean:
 # Pull, build, and deploy all services
 deploy:
     -git pull
+    @just down
     @just build
     @just up
