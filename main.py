@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 RSS_SOURCE = "https://www.reddit.com/r/BlackWolfFeed.rss"
 CACHE_DURATION = 3600  # 1 hour in seconds
+PODCAST_IMAGE = "https://static-cdn.jtvnw.net/jtv_user_pictures/55a81036-85b5-426d-8a0b-4096f0d9b732-profile_image-300x300.jpg"
 
 # Simple in-memory cache
 _cache: Optional[Tuple[float, str]] = None
@@ -109,6 +110,7 @@ def generate_podcast_rss(entries: List[dict]) -> str:
     fg.podcast.itunes_explicit('yes')
     fg.podcast.itunes_complete('no')
     fg.podcast.itunes_type('episodic')
+    fg.podcast.itunes_image(PODCAST_IMAGE)
     
     for entry in entries:
         fe = fg.add_entry()
@@ -120,8 +122,10 @@ def generate_podcast_rss(entries: List[dict]) -> str:
         if entry['published']:
             fe.pubDate(datetime(*entry['published'][:6], tzinfo=timezone.utc))
         
-        # Add audio enclosure
+        # Add audio enclosure and episode image
         fe.enclosure(entry['audio_url'], 0, 'audio/m4a')
+        fe.load_extension('podcast')
+        fe.podcast.itunes_image(PODCAST_IMAGE)
         
     return fg.rss_str(pretty=True).decode('utf-8')
 
