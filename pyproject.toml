@@ -1,0 +1,13 @@
+[project]
+name = "reddit-soundgasm-rss"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "beautifulsoup4>=4.13.4",
+    "fastapi>=0.116.1",
+    "feedgen>=1.0.0",
+    "feedparser>=6.0.11",
+    "requests>=2.32.4",
+    "uvicorn>=0.35.0",
+]
