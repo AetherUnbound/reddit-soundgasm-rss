@@ -27,6 +27,28 @@ The application will be available at http://localhost:8000
 - Main RSS feed: `http://localhost:8000/feed.rss`
 - Health check: `http://localhost:8000/`
 
+### Using Just (Recommended)
+
+```bash
+# Build the image
+just build
+
+# Start the application
+just up
+
+# Stop the application
+just down
+
+# Run locally for development
+just dev
+
+# Install dependencies
+just install
+
+# Test the RSS endpoint
+just test
+```
+
 ### Docker
 
 ```bash
@@ -35,13 +57,17 @@ docker build -t reddit-soundgasm-rss .
 
 # Run the container
 docker run --rm -p 8000:8000 reddit-soundgasm-rss
+
+# Or use Docker Compose
+docker compose up
 ```
 
 ## Requirements
 
 - Python 3.13+
 - uv (for dependency management)
-- Docker (for containerization)
+- Docker (for containerization)  
+- Just (task runner, optional but recommended)
 
 ## Dependencies
 
