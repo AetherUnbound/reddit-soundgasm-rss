@@ -1,3 +1,7 @@
+@default:
+    just -ul
+
+
 # Build the Docker image
 build:
     docker build -t reddit-soundgasm-rss .
