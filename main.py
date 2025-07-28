@@ -1,9 +1,12 @@
 import re
+import sys
 import time
 import logging
+from pathlib import Path
 from typing import List, Optional, Tuple
 from datetime import datetime, timezone
 
+import click
 import feedparser
 import requests
 from bs4 import BeautifulSoup
@@ -18,6 +21,9 @@ RSS_SOURCE = "https://www.reddit.com/r/BlackWolfFeed.rss"
 CACHE_DURATION = 3600  # 1 hour in seconds
 PODCAST_IMAGE = "https://static-cdn.jtvnw.net/jtv_user_pictures/55a81036-85b5-426d-8a0b-4096f0d9b732-profile_image-300x300.jpg"
 USER_AGENT = "RedditSoundgasmRSSBot/1.0 (+https://github.com/user/reddit-soundgasm-rss)"
+
+# Global configuration
+LOCAL_RSS_FILE: Optional[str] = None
 
 # Simple in-memory cache
 _cache: Optional[Tuple[float, str]] = None
@@ -76,10 +82,17 @@ def scrape_soundgasm_audio(url: str) -> tuple[Optional[str], Optional[str]]:
 def fetch_reddit_rss() -> List[dict]:
     """Fetch and parse the Reddit RSS feed."""
     try:
-        response = requests.get(RSS_SOURCE, timeout=10, headers={'User-Agent': USER_AGENT})
-        response.raise_for_status()
+        if LOCAL_RSS_FILE:
+            logger.info(f"Reading local RSS file: {LOCAL_RSS_FILE}")
+            with open(LOCAL_RSS_FILE, 'r', encoding='utf-8') as f:
+                feed_content = f.read()
+            feed = feedparser.parse(feed_content)
+        else:
+            logger.info(f"Fetching RSS from: {RSS_SOURCE}")
+            response = requests.get(RSS_SOURCE, timeout=10, headers={'User-Agent': USER_AGENT})
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
         
-        feed = feedparser.parse(response.content)
         entries = []
         
         for entry in feed.entries:
@@ -181,6 +194,22 @@ async def root():
     return {"message": "Reddit Soundgasm RSS Converter", "feed_url": "/feed.rss"}
 
 
-if __name__ == "__main__":
+@click.command()
+@click.option('--local', type=click.Path(exists=True), help='Path to local RSS file instead of fetching from Reddit')
+@click.option('--port', default=8000, help='Port to run the server on (default: 8000)')
+@click.option('--host', default="0.0.0.0", help='Host to bind to (default: 0.0.0.0)')
+def main(local, port, host):
+    """Reddit Soundgasm RSS Converter"""
+    global LOCAL_RSS_FILE
+    
+    # Set global configuration
+    if local:
+        LOCAL_RSS_FILE = str(Path(local).absolute())
+        logger.info(f"Using local RSS file: {LOCAL_RSS_FILE}")
+    
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host=host, port=port)
+
+
+if __name__ == "__main__":
+    main()
