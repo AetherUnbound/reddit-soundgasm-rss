@@ -21,6 +21,8 @@ RSS_SOURCE = "https://www.reddit.com/r/BlackWolfFeed.rss"
 CACHE_DURATION = 3600  # 1 hour in seconds
 PODCAST_IMAGE = "https://static-cdn.jtvnw.net/jtv_user_pictures/55a81036-85b5-426d-8a0b-4096f0d9b732-profile_image-600x600.jpg"
 USER_AGENT = "RedditSoundgasmRSSBot/1.0 (+https://github.com/user/reddit-soundgasm-rss)"
+CACHE_DIR = Path("cache")
+LAST_SUCCESSFUL_FEED = CACHE_DIR / "last_successful_feed.xml"
 
 # Global configuration
 LOCAL_RSS_FILE: Optional[str] = None
@@ -28,6 +30,26 @@ LOCAL_RSS_FILE: Optional[str] = None
 # Simple in-memory cache
 _cache: Optional[Tuple[float, str]] = None
 
+
+def save_rss_to_disk(rss_content: str) -> None:
+    """Save RSS content to disk cache."""
+    CACHE_DIR.mkdir(exist_ok=True)
+
+    LAST_SUCCESSFUL_FEED.write_text(rss_content)
+    logger.info(f"Saved RSS feed to disk cache at {LAST_SUCCESSFUL_FEED}")
+
+
+def load_rss_from_disk() -> Optional[str]:
+    """Load RSS content from disk cache if available."""
+    if not LAST_SUCCESSFUL_FEED.exists():
+        return None
+    rss_content = LAST_SUCCESSFUL_FEED.read_text()
+
+    cache_timestamp = LAST_SUCCESSFUL_FEED.stat().st_mtime
+
+    logger.info(f"Loaded RSS feed from disk cache (cached at {datetime.fromtimestamp(cache_timestamp)})")
+    return rss_content
+        
 
 def extract_soundgasm_links(content: str) -> List[str]:
     """Extract soundgasm.net links from RSS entry content."""
@@ -156,20 +178,42 @@ async def get_rss_feed():
         return Response(content=_cache[1], media_type="application/rss+xml")
     
     logger.info("Fetching fresh RSS feed...")
-    entries = fetch_reddit_rss()
+    try:
+        entries = fetch_reddit_rss()
+        
+        if entries:
+            # Successful generation - update both caches
+            rss_content = generate_podcast_rss(entries)
+            logger.info(f"Generated RSS feed with {len(entries)} entries")
+            
+            # Cache in memory
+            _cache = (current_time, rss_content)
+            
+            # Cache to disk for fallback
+            save_rss_to_disk(rss_content)
+            
+            return Response(content=rss_content, media_type="application/rss+xml")
+    except Exception as e:
+        logger.error(f"Error generating fresh RSS feed: {e}")
     
-    if not entries:
-        logger.warning("No entries found")
-        error_content = "<?xml version='1.0' encoding='UTF-8'?><rss version='2.0'><channel><title>Error</title><description>No entries found</description></channel></rss>"
-        return Response(content=error_content, media_type="application/rss+xml")
+    # Failed to generate fresh feed - try fallbacks
+    logger.warning("Fresh RSS generation failed, trying fallbacks...")
     
-    rss_content = generate_podcast_rss(entries)
-    logger.info(f"Generated RSS feed with {len(entries)} entries")
+    # First fallback: try memory cache (even if expired)
+    if _cache:
+        logger.info("Serving expired memory cache as fallback")
+        return Response(content=_cache[1], media_type="application/rss+xml")
     
-    # Cache the generated content
-    _cache = (current_time, rss_content)
+    # Second fallback: try disk cache
+    disk_rss = load_rss_from_disk()
+    if disk_rss:
+        logger.info("Serving disk cache as fallback")
+        return Response(content=disk_rss, media_type="application/rss+xml")
     
-    return Response(content=rss_content, media_type="application/rss+xml")
+    # Final fallback: error RSS
+    logger.error("No cached content available - serving error RSS")
+    error_content = "<?xml version='1.0' encoding='UTF-8'?><rss version='2.0'><channel><title>Error</title><description>No entries found</description></channel></rss>"
+    return Response(content=error_content, media_type="application/rss+xml")
 
 
 @app.get("/")
