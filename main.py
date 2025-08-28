@@ -31,6 +31,33 @@ LOCAL_RSS_FILE: Optional[str] = None
 _cache: Optional[Tuple[float, str]] = None
 
 
+class PodcastRSSGenerator:
+    """Handles RSS feed generation for the podcast."""
+    
+    def __init__(self):
+        """Initialize the base feed generator with podcast metadata."""
+        self.fg = FeedGenerator()
+        self.fg.title('BlackWolfFeed Audio')
+        self.fg.description('Audio episodes from BlackWolfFeed subreddit')
+        self.fg.link(href='https://www.reddit.com/r/BlackWolfFeed', rel='alternate')
+        self.fg.id('https://www.reddit.com/r/BlackWolfFeed.rss')
+        self.fg.logo(PODCAST_IMAGE)
+        self.fg.language('en')
+        self.fg.lastBuildDate(datetime.now(timezone.utc))
+        
+        # Add podcast-specific elements
+        self.fg.load_extension('podcast')
+        self.fg.podcast.itunes_category('Comedy')
+        self.fg.podcast.itunes_explicit('yes')
+        self.fg.podcast.itunes_complete('no')
+        self.fg.podcast.itunes_type('episodic')
+        self.fg.podcast.itunes_image(PODCAST_IMAGE)
+    
+    def render(self) -> str:
+        """Render the RSS feed as a string."""
+        return self.fg.rss_str(pretty=True).decode('utf-8')
+
+
 def save_rss_to_disk(rss_content: str) -> None:
     """Save RSS content to disk cache."""
     CACHE_DIR.mkdir(exist_ok=True)
@@ -130,25 +157,8 @@ def fetch_reddit_rss() -> List[dict]:
         return []
 
 
-def generate_podcast_rss(entries: List[dict]) -> str:
-    """Generate podcast RSS feed with audio enclosures."""
-    fg = FeedGenerator()
-    fg.title('BlackWolfFeed Audio')
-    fg.description('Audio episodes from BlackWolfFeed subreddit')
-    fg.link(href='https://www.reddit.com/r/BlackWolfFeed', rel='alternate')
-    fg.id('https://www.reddit.com/r/BlackWolfFeed.rss')
-    fg.logo(PODCAST_IMAGE)
-    fg.language('en')
-    fg.lastBuildDate(datetime.now(timezone.utc))
-    
-    # Add podcast-specific elements
-    fg.load_extension('podcast')
-    fg.podcast.itunes_category('Comedy')
-    fg.podcast.itunes_explicit('yes')
-    fg.podcast.itunes_complete('no')
-    fg.podcast.itunes_type('episodic')
-    fg.podcast.itunes_image(PODCAST_IMAGE)
-    
+def augment_rss_with_episodes(fg: FeedGenerator, entries: List[dict]) -> None:
+    """Add episode entries to an existing FeedGenerator."""
     for i, entry in enumerate(entries):
         fe = fg.add_entry()
         fe.title(entry['title'])
@@ -162,8 +172,6 @@ def generate_podcast_rss(entries: List[dict]) -> str:
         # Add audio enclosure
         fe.enclosure(entry['audio_url'], 0, 'audio/m4a')
         fe.podcast.itunes_image(PODCAST_IMAGE)
-        
-    return fg.rss_str(pretty=True).decode('utf-8')
 
 
 @app.get("/feed.rss")
@@ -171,19 +179,22 @@ async def get_rss_feed():
     """Main endpoint that returns the converted RSS feed."""
     global _cache
     current_time = time.time()
-    
+
     # Check if we have valid cached content
     if _cache and (current_time - _cache[0]) < CACHE_DURATION:
         logger.info("Serving cached RSS feed")
         return Response(content=_cache[1], media_type="application/rss+xml")
-    
+
+    rss_gen = PodcastRSSGenerator()
+
     logger.info("Fetching fresh RSS feed...")
     try:
         entries = fetch_reddit_rss()
         
         if entries:
             # Successful generation - update both caches
-            rss_content = generate_podcast_rss(entries)
+            augment_rss_with_episodes(rss_gen.fg, entries)
+            rss_content = rss_gen.render()
             logger.info(f"Generated RSS feed with {len(entries)} entries")
             
             # Cache in memory
@@ -210,10 +221,9 @@ async def get_rss_feed():
         logger.info("Serving disk cache as fallback")
         return Response(content=disk_rss, media_type="application/rss+xml")
     
-    # Final fallback: error RSS
-    logger.error("No cached content available - serving error RSS")
-    error_content = "<?xml version='1.0' encoding='UTF-8'?><rss version='2.0'><channel><title>Error</title><description>No entries found</description></channel></rss>"
-    return Response(content=error_content, media_type="application/rss+xml")
+    # Final fallback: empty RSS with proper podcast metadata
+    logger.error("No cached content available - serving empty RSS")
+    return Response(content=rss_gen.render(), media_type="application/rss+xml")
 
 
 @app.get("/")
@@ -238,7 +248,9 @@ def main(local, port, host):
         # Generate RSS and print to stdout instead of running server
         entries = fetch_reddit_rss()
         if entries:
-            rss_content = generate_podcast_rss(entries)
+            rss_gen = PodcastRSSGenerator()
+            augment_rss_with_episodes(rss_gen.fg, entries)
+            rss_content = rss_gen.render()
             print(rss_content)
             logger.info(f"Generated RSS with {len(entries)} entries")
         else:
