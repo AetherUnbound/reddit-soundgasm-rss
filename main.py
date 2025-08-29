@@ -39,7 +39,7 @@ class PodcastRSSGenerator:
         self.fg = FeedGenerator()
         self.fg.title('BlackWolfFeed Audio')
         self.fg.description('Audio episodes from BlackWolfFeed subreddit')
-        self.fg.link(href='https://www.reddit.com/r/BlackWolfFeed', rel='alternate')
+        self.fg.link(href='https://pod.link/1097417804', rel='alternate')
         self.fg.id('https://www.reddit.com/r/BlackWolfFeed.rss')
         self.fg.logo(PODCAST_IMAGE)
         self.fg.language('en')
