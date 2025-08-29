@@ -24,9 +24,6 @@ USER_AGENT = "RedditSoundgasmRSSBot/1.0 (+https://github.com/user/reddit-soundga
 CACHE_DIR = Path("cache")
 LAST_SUCCESSFUL_FEED = CACHE_DIR / "last_successful_feed.xml"
 
-# Global configuration
-LOCAL_RSS_FILE: Optional[str] = None
-
 # Simple in-memory cache
 _cache: Optional[Tuple[float, str]] = None
 
@@ -116,13 +113,12 @@ def scrape_soundgasm_audio(url: str) -> Optional[str]:
         return None
 
 
-def fetch_reddit_rss() -> List[dict]:
+def fetch_reddit_rss(local_rss_file: Path | None = None) -> List[dict]:
     """Fetch and parse the Reddit RSS feed."""
     try:
-        if LOCAL_RSS_FILE:
-            logger.info(f"Reading local RSS file: {LOCAL_RSS_FILE}")
-            with open(LOCAL_RSS_FILE, 'r', encoding='utf-8') as f:
-                feed_content = f.read()
+        if local_rss_file:
+            logger.info(f"Reading local RSS file: {local_rss_file}")
+            feed_content = local_rss_file.read_text()
             feed = feedparser.parse(feed_content)
         else:
             logger.info(f"Fetching RSS from: {RSS_SOURCE}")
@@ -238,15 +234,13 @@ async def root():
 @click.option('--host', default="0.0.0.0", help='Host to bind to (default: 0.0.0.0)')
 def main(local, port, host):
     """Reddit Soundgasm RSS Converter"""
-    global LOCAL_RSS_FILE
-    
+
     # Set global configuration
     if local:
-        LOCAL_RSS_FILE = str(Path(local).absolute())
         logger.info(f"Using local RSS file: {LOCAL_RSS_FILE}")
         
         # Generate RSS and print to stdout instead of running server
-        entries = fetch_reddit_rss()
+        entries = fetch_reddit_rss(Path(local).absolute())
         if entries:
             rss_gen = PodcastRSSGenerator()
             augment_rss_with_episodes(rss_gen.fg, entries)
